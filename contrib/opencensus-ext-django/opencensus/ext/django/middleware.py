@@ -263,3 +263,34 @@ class OpencensusMiddleware(MiddlewareMixin):
             log.error('Failed to trace request', exc_info=True)
         finally:
             return response
+
+    def _trace_db_call(self, execute, sql, params, many, context):
+        tracer = _get_current_tracer()
+        if tracer is not None:
+            if many:
+                method_name = 'executemany'
+            else:
+                method_name = 'execute'
+            db_type = context['connection'].vendor
+
+            span = tracer.start_span()
+            span.name = '{}.query'.format(db_type)
+            span.span_kind = span_module.SpanKind.CLIENT
+            tracer.add_attribute_to_current_span(
+                '{}.query'.format(db_type), sql)
+            tracer.add_attribute_to_current_span(
+                '{}.cursor.method.name'.format(db_type), method_name)
+
+        result_status = 'ok'
+        try:
+            result = execute(sql, params, many, context)
+        except Exception:  # pragma: NO COVER
+            result_status = 'error'
+            raise
+        finally:
+            if tracer is not None:
+                tracer.add_attribute_to_current_span(
+                    '{}.result'.format(db_type), result_status)
+                tracer.end_span()
+
+        return result
