@@ -293,5 +293,4 @@ class OpencensusMiddleware(MiddlewareMixin):
             tracer.add_attribute_to_current_span(
                 '{}.result'.format(db_type), result_status)
             tracer.end_span()
-
-        return result
+            return result
